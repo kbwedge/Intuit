@@ -1,7 +1,8 @@
 ---
-title: "ASSIGNMENT 3"
+title: "Intuit"
 author: 
    - "Kevin Wedge"      # Replace with name(s)
+   - "Premal Tailor"
    - "Section 41"         # Replace with section number
 output:
   pdf_document: default
