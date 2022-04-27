@@ -1,0 +1,182 @@
+---
+title: "ASSIGNMENT 3"
+author: 
+   - "Kevin Wedge"      # Replace with name(s)
+   - "Section 41"         # Replace with section number
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+# Preliminaries
+
+### Determine notebook defaults:
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE,      # Print all the code in all the chunks
+                      warning=FALSE,  # Don't print warning statements
+                      message=FALSE,  # Don't print other R output messages
+                      comment=NA)     # Helps produce prettier output
+```
+
+### Load packages:
+```{r, echo=FALSE, message = FALSE, warning = FALSE}
+library(gmodels)
+library(modelr)
+library(janitor)
+library(haven)
+library(readxl)
+library(knitr)
+library(psych)
+library(statar)
+library(tidyverse)
+library(nnet)
+library(kelloggmktg482)
+```
+
+### Read in the data:
+```{r}
+# use load("filename.Rdata") for .Rdata files
+setwd("C:/Users/kbwed/Documents/MKTG482/Intuit")
+load("intuit_online.Rdata")
+intuit <- intuit %>%
+  mutate(id = factor(id),
+         zip = factor(zip),
+         version2013 = factor(version2013),
+         upgraded = factor(upgraded),
+         payroll = factor(payroll),
+         bizflag = factor(bizflag),
+         sex = factor(sex),
+         res = factor(res),
+         training = factor(training),
+         state = factor(state))
+
+```
+
+# Assignment answers
+
+## Part 1, Question 1
+
+Type your answer text here, intervowen with blocks of R code
+
+```{r}
+##Set training and test data sets
+intuit.training <- intuit %>% filter(training==1)
+intuit.test <- intuit %>% filter(training==0)
+
+##Run Regression/NN
+logistic <- glm(res ~ speeddown + speedup + last + numords + dollars + sincepurch + version2013 + upgraded + payroll + bizflag + income + medhvalue + sex + state, family=binomial, data=intuit.training)
+
+logistic_2 <- glm(res ~ speeddown + speedup + last + numords + dollars + sincepurch + version2013 + upgraded + payroll + bizflag + I(income^2) + income + medhvalue + sex + state, family=binomial, data=intuit.training)
+
+nn <- nnet(res ~ speeddown + speedup + last + numords + dollars + sincepurch + version2013 + upgraded + payroll + bizflag + income + medhvalue + sex + state,
+data=intuit.training, size=5, decay=0.1, maxit=1000)
+
+nn_2 <- nnet(res ~ speeddown + speedup + last + numords + dollars + sincepurch + version2013 + upgraded + payroll + bizflag + income + medhvalue + sex + state,
+data=intuit.training, size=10, decay=0.1, maxit=1000)
+
+nn_3 <- nnet(res ~ speeddown + speedup + last + numords + dollars + sincepurch + version2013 + upgraded + payroll + bizflag + income + medhvalue + sex + state,
+data=intuit.training, size=5, decay=0.001, maxit=1000)
+
+##Create predictions on training
+intuit.training <- intuit.training %>%
+  mutate(pred_lr = predict(logistic, type="response"),
+         pred_lr_2 = predict(logistic_2, type="response"),
+         pred_nn = predict(nn, type="raw")[,1],
+         pred_nn_2 = predict(nn_2, type="raw")[,1],
+         pred_nn_3 = predict(nn_3, type="raw")[,1])
+
+##Calculate AUC for training
+gainsplot(intuit.training$pred_lr, intuit.training$pred_lr_2, intuit.training$pred_nn, intuit.training$pred_nn_2, intuit.training$pred_nn_3,
+          label.var=intuit.training$res)
+
+##Create predictions on test
+intuit.test <- intuit.test %>%
+  mutate(pred_lr = predict(logistic, newdata=intuit.test, type="response"),
+         pred_lr_2 = predict(logistic_2, newdata=intuit.test, type="response"),
+         pred_nn = predict(nn, newdata=intuit.test,type="raw")[,1],
+         pred_nn_2 = predict(nn_2, newdata=intuit.test,type="raw")[,1],
+         pred_nn_3 = predict(nn_3, newdata=intuit.test,type="raw")[,1])
+
+##Calculate AUC for test
+gainsplot(intuit.test$pred_lr, intuit.test$pred_lr_2, intuit.test$pred_nn, intuit.test$pred_nn_2, intuit.test$pred_nn_3,
+          label.var=intuit.test$res)
+
+```
+```{r}
+
+##Run preferred model on full data set
+nn_full <- nnet(res ~ speeddown + speedup + last + numords + dollars + sincepurch + version2013 + upgraded + payroll + bizflag + income + medhvalue + sex + state,
+data=intuit, size=5, decay=0.1, maxit=1000)
+
+nn_2_full <- nnet(res ~ speeddown + speedup + last + numords + dollars + sincepurch + version2013 + upgraded + payroll + bizflag + income + medhvalue + sex + state,
+data=intuit, size=10, decay=0.01, maxit=10000)
+
+##Create predictions on full data set
+intuit <- intuit %>%
+  mutate(pred_nn_full = predict(nn_full, type="raw")[,1],
+         pred_nn_2_full = predict(nn_2_full, type="raw")[,1])
+
+##Calculate AUC for full data set
+gainsplot(intuit$pred_nn_full, intuit$pred_nn_2_full,
+          label.var=intuit$res)
+
+```
+```{r}
+
+##Create predictions on wave 2 data set
+net.rev <- 180
+marg.cost <- 1.6
+num.cust <- 25000
+berr <- marg.cost / net.rev
+
+intuit.wave2 <- intuit.wave2 %>%
+  mutate(pred_nn_wave2 = predict(nn_2_full, newdata =intuit.wave2, type="raw")[,1],
+         target.nn = 1*(pred_nn_wave2 > berr))
+
+```
+
+
+```{r}
+
+##profitability analysis
+
+intuit.wave2 %>%
+  filter(target.nn == 1) %>%
+  summarize(frac_mailto = n()/nrow(intuit.wave2),
+            resp_rate = mean(pred_nn_wave2)) %>%
+mutate(targeted_cust = num.cust * frac_mailto,
+buyers = targeted_cust * resp_rate, 
+profit = buyers * net.rev - (marg.cost* targeted_cust),
+profit_per_cust = profit / targeted_cust)
+
+```
+
+
+
+```{r}
+summary(logistic)
+varimpplot(logistic, target="res")
+
+perc.res.overall <- mean(intuit.training$res==1)
+
+pardepplot(logistic, pred.var="state", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="speeddown", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="speedup", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="last", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="numords", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="dollars", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="sincepurch", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="version2013", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="upgraded", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="payroll", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="bizflag", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="income", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="medhvalue", data=intuit.training, hline=perc.res.overall)
+pardepplot(logistic, pred.var="sex", data=intuit.training, hline=perc.res.overall)
+
+##The 'messages' variable seems to have greatest importance in determining whether or not the 
+##consumer purchased the karaoke deal followed by 'monetary' and 'music'. The variable importance 
+##plot defines 'recency' to be the least important variable, however, the partial dependence plot 
+##implies that 'recency' can have a material impact on the purchase probability when viewed over 
+##it's total range of values.
+```
