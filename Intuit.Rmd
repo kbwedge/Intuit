@@ -1,8 +1,10 @@
 ---
 title: "Intuit"
 author: 
-   - "Kevin Wedge"      # Replace with name(s)
+   - "Kevin Wedge"
    - "Premal Tailor"
+   - "Deep Vaghela"
+   - "Yiyang Ge"
    - "Section 41"         # Replace with section number
 output:
   pdf_document: default
